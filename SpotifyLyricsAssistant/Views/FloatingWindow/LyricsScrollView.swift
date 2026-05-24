@@ -1,0 +1,82 @@
+import SwiftUI
+
+/// Displays the full scrollable lyrics list with the current line highlighted and auto-scrolled into view.
+struct LyricsScrollView: View {
+    @EnvironmentObject var player: PlayerViewModel
+    @EnvironmentObject var settings: SettingsViewModel
+
+    var body: some View {
+        ScrollViewReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVStack(spacing: 2) {
+                    ForEach(Array((player.lyrics?.lines ?? []).enumerated()), id: \.element.id) { index, line in
+                        LyricsLineView(
+                            text: line.text,
+                            isCurrent: index == player.currentLineIndex,
+                            isPrevious: index == player.currentLineIndex - 1,
+                            isNext: index == player.currentLineIndex + 1,
+                            fontSize: settings.settings.windowFontSize
+                        )
+                        .id(line.id)
+                    }
+                }
+                .padding(.vertical, 16)
+                .padding(.horizontal, 20)
+            }
+            .onChange(of: player.currentLineIndex) { _, newIndex in
+                guard let lyrics = player.lyrics, newIndex < lyrics.lines.count else { return }
+                let line = lyrics.lines[newIndex]
+                withAnimation(.easeInOut(duration: 0.4)) {
+                    proxy.scrollTo(line.id, anchor: .center)
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Single Lyrics Line View
+
+struct LyricsLineView: View {
+    let text: String
+    let isCurrent: Bool
+    let isPrevious: Bool
+    let isNext: Bool
+    let fontSize: Double
+
+    private var displayText: String {
+        text.isEmpty ? "♪" : text
+    }
+
+    var body: some View {
+        Text(displayText)
+            .font(.system(size: effectiveFontSize, weight: fontWeight, design: .default))
+            .foregroundStyle(foregroundColor)
+            .multilineTextAlignment(.center)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.vertical, isCurrent ? 6 : 3)
+            .frame(maxWidth: .infinity)
+            .scaleEffect(isCurrent ? 1.0 : 0.92)
+            .animation(.spring(duration: 0.35, bounce: 0.1), value: isCurrent)
+    }
+
+    private var effectiveFontSize: Double {
+        if isCurrent { return fontSize }
+        if isPrevious || isNext { return fontSize * 0.78 }
+        return fontSize * 0.68
+    }
+
+    private var fontWeight: Font.Weight {
+        isCurrent ? .semibold : .regular
+    }
+
+    private var foregroundColor: Color {
+        if isCurrent {
+            return .white
+        } else if isPrevious || isNext {
+            return .white.opacity(0.55)
+        } else {
+            return .white.opacity(0.28)
+        }
+    }
+}
