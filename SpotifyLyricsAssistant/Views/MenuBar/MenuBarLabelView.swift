@@ -5,7 +5,8 @@ import AppKit
 /// Displays the current lyrics line with a Marquee animation when text overflows.
 struct MenuBarLabelView: View {
     let text: String
-    let maxWidth: CGFloat = 280
+    /// Max width for lyrics scrolling text; kept compact to avoid crowding the menu bar.
+    let maxWidth: CGFloat = 200
 
     @State private var textWidth: CGFloat = 0
     @State private var offset: CGFloat = 0
@@ -13,21 +14,21 @@ struct MenuBarLabelView: View {
 
     var body: some View {
         HStack(spacing: 4) {
-            // Music note icon
+            // Music note icon — always visible as a minimal footprint fallback
             Image(systemName: "music.note")
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(.primary)
 
-            // Scrolling lyrics text
-            if text.isEmpty {
-                Text("Spotify 歌词助手")
-                    .font(.system(size: 12, weight: .regular))
-                    .foregroundStyle(.primary)
-            } else {
+            // Only show text when there is an active lyrics line.
+            // When idle, the bare icon (~16 pt) keeps the status bar footprint tiny,
+            // which prevents the item from being hidden on crowded menu bars.
+            if !text.isEmpty {
                 MarqueeText(text: text, maxWidth: maxWidth - 24)
+                    .frame(maxWidth: maxWidth - 24)
             }
         }
-        .frame(maxWidth: maxWidth)
+        // Use a fixed width only when we have text; otherwise let the icon size naturally.
+        .frame(maxWidth: text.isEmpty ? nil : maxWidth)
     }
 }
 
