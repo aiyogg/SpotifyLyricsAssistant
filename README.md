@@ -1,10 +1,10 @@
 # Spotify 歌词助手 (SpotifyLyricsAssistant)
 
 <div align="center">
-  <img src="assets/icon.png" width="150" height="150" alt="App Icon">
+  <img src="assets/icon.png" width="128" height="128" alt="App Icon">
+  <p><strong>一个 macOS 原生桌面歌词悬浮窗应用，为 Spotify 用户提供媲美原生体验的桌面歌词。</strong></p>
+  <img src="assets/screenshot.png" alt="App Screenshot" width="800" style="border-radius: 12px; margin-top: 10px;">
 </div>
-
-一个 macOS 原生桌面歌词悬浮窗应用，为 Spotify 用户提供类似 QQ 音乐 / 酷狗音乐的桌面歌词助手功能。
 
 ## ✨ 功能特性
 
