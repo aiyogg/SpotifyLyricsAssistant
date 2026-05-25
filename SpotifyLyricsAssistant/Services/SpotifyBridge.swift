@@ -103,7 +103,7 @@ actor SpotifyBridge {
     /// Executes an AppleScript string and returns the string result.
     private func runAppleScript(_ source: String) async -> String? {
         return await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
+            DispatchQueue.main.async {
                 guard let script = NSAppleScript(source: source) else {
                     continuation.resume(returning: nil)
                     return
