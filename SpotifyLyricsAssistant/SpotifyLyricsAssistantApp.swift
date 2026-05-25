@@ -59,7 +59,6 @@ struct SpotifyLyricsAssistantApp: App {
             queue: .main
         ) { _ in
             let s = settings.settings
-            appDelegate.updatePanelOpacity(s.windowOpacity)
             appDelegate.updatePanelLevel(s.windowLevel)
         }
     }

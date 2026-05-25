@@ -1,4 +1,6 @@
 import SwiftUI
+import AppKit
+import CoreText
 
 /// The root SwiftUI view displayed inside the FloatingLyricsPanel.
 /// Features a glassmorphism background, animated lyrics lines, and a drag handle.
@@ -41,6 +43,11 @@ struct LyricsWindowView: View {
                 isHovering = hovering
             }
         }
+        // Window-level opacity (applied via SwiftUI so glass effect still works)
+        .opacity(settings.settings.windowOpacity)
+        // Force glass effect to always appear "active" even when this panel
+        // is not the key window (otherwise glassEffect goes dark/inactive)
+        .environment(\.controlActiveState, .active)
         .frame(minWidth: 250, minHeight: 60)
     }
 }
@@ -49,28 +56,30 @@ struct LyricsWindowView: View {
 
 struct GlassBackground: View {
     var body: some View {
-        ZStack {
-            // NSVisualEffectView via AppKit bridge
-            VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-
-            // Subtle border
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
+        if #available(macOS 26.0, *) {
+            // Native Liquid Glass (macOS 26 Tahoe)
+            // .glassEffect handles its own shape, border, and blur — no extra layers needed
+            Color.clear
+                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+        } else {
+            // Fallback for macOS 15 and earlier
+            ZStack {
+                VisualEffectView()
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+            }
         }
     }
 }
 
-// MARK: - Visual Effect (AppKit bridge)
+// MARK: - Visual Effect fallback (macOS 15 and below)
 
 struct VisualEffectView: NSViewRepresentable {
-    let material: NSVisualEffectView.Material
-    let blendingMode: NSVisualEffectView.BlendingMode
-
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
-        view.material = material
-        view.blendingMode = blendingMode
+        view.material = .sidebar
+        view.blendingMode = .behindWindow
         view.state = .active
         view.wantsLayer = true
         view.layer?.cornerRadius = 16
@@ -78,10 +87,7 @@ struct VisualEffectView: NSViewRepresentable {
         return view
     }
 
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {
-        view.material = material
-        view.blendingMode = blendingMode
-    }
+    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
 }
 
 // MARK: - No Lyrics / Error View
@@ -145,21 +151,83 @@ struct SpotifyNotRunningView: View {
     }
 }
 
+// MARK: - Font Family Info
+
+/// Wraps a font family name with its localized display name.
+/// We store the internal `familyName` (used with Font.custom) but show
+/// the system-localized `displayName` to the user.
+private struct FontFamilyItem: Identifiable {
+    let id: String       // PostScript/internal family name — used for Font.custom()
+    let displayName: String  // Localized name shown in the picker
+
+    /// Builds a list of all installed font families with their localized names,
+    /// sorted by display name using the current locale.
+    static func allInstalled() -> [FontFamilyItem] {
+        NSFontManager.shared.availableFontFamilies.compactMap { family in
+            let descriptor = CTFontDescriptorCreateWithNameAndSize(family as CFString, 12)
+            let font = CTFontCreateWithFontDescriptor(descriptor, 12, nil)
+            // CTFontCopyLocalizedName returns the name in the user's locale
+            let localized = CTFontCopyLocalizedName(font, kCTFontFamilyNameKey, nil)
+                .map { $0 as String } ?? family
+            return FontFamilyItem(id: family, displayName: localized)
+        }
+        .sorted { $0.displayName.localizedStandardCompare($1.displayName) == .orderedAscending }
+    }
+}
+
 // MARK: - Window Controls Overlay
 
 struct WindowControlsOverlay: View {
     @EnvironmentObject var player: PlayerViewModel
     @EnvironmentObject var settings: SettingsViewModel
 
+    // Computed once per hover — CoreText lookup is fast but we avoid calling it per render
+    private let fontFamilies: [FontFamilyItem] = FontFamilyItem.allInstalled()
+
+    private var currentFontDisplayName: String {
+        if settings.settings.windowFontName.isEmpty { return "系统默认" }
+        return fontFamilies.first { $0.id == settings.settings.windowFontName }?.displayName
+            ?? settings.settings.windowFontName
+    }
+
     var body: some View {
         VStack {
             HStack {
                 Spacer()
-                HStack(spacing: 8) {
+                HStack(spacing: 6) {
                     // Reload lyrics
                     ControlButton(icon: "arrow.clockwise", tooltip: "重新加载歌词") {
                         Task { await player.reloadLyrics() }
                     }
+
+                    Divider().frame(height: 14)
+
+                    // Time offset controls
+                    if settings.settings.lyricsOffsetSeconds != 0 {
+                        Text(String(format: "%+.1fs", settings.settings.lyricsOffsetSeconds))
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                    }
+                    ControlTextButton(text: "快", tooltip: "歌词提前0.5秒") {
+                        settings.settings.lyricsOffsetSeconds -= 0.5
+                        player.updateCurrentLine(at: player.playerPosition)
+                    }
+                    ControlTextButton(text: "慢", tooltip: "歌词延后0.5秒") {
+                        settings.settings.lyricsOffsetSeconds += 0.5
+                        player.updateCurrentLine(at: player.playerPosition)
+                    }
+
+                    Divider().frame(height: 14)
+
+                    // Opacity controls
+                    ControlButton(icon: "sun.min", tooltip: "降低透明度") {
+                        settings.settings.windowOpacity = max(0.2, settings.settings.windowOpacity - 0.1)
+                    }
+                    ControlButton(icon: "sun.max", tooltip: "提高透明度") {
+                        settings.settings.windowOpacity = min(1.0, settings.settings.windowOpacity + 0.1)
+                    }
+
+                    Divider().frame(height: 14)
 
                     // Font size controls
                     ControlButton(icon: "textformat.size.smaller", tooltip: "缩小字体") {
@@ -168,6 +236,54 @@ struct WindowControlsOverlay: View {
                     ControlButton(icon: "textformat.size.larger", tooltip: "放大字体") {
                         settings.settings.windowFontSize = min(48, settings.settings.windowFontSize + 2)
                     }
+
+                    // Font picker
+                    Menu {
+                        // "系统默认" always at the top
+                        Button {
+                            settings.settings.windowFontName = ""
+                        } label: {
+                            HStack {
+                                Text("系统默认")
+                                if settings.settings.windowFontName.isEmpty {
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                        Divider()
+                        // All installed font families with localized display names
+                        ForEach(fontFamilies) { item in
+                            Button {
+                                // Store internal family name (used by Font.custom)
+                                settings.settings.windowFontName = item.id
+                            } label: {
+                                HStack {
+                                    // Show user-friendly localized name
+                                    Text(item.displayName)
+                                    if settings.settings.windowFontName == item.id {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 2) {
+                            Image(systemName: "textformat")
+                                .font(.system(size: 11, weight: .medium))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .medium))
+                        }
+                        .foregroundStyle(.secondary)
+                        .frame(height: 22)
+                        .padding(.horizontal, 4)
+                        .background(Color.white.opacity(0.0), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                    .help("选择字体（\(currentFontDisplayName)）")
+
+
+                    Divider().frame(height: 14)
 
                     // Close
                     ControlButton(icon: "xmark", tooltip: "隐藏悬浮窗") {
@@ -194,6 +310,28 @@ struct ControlButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: icon)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isHovered ? .primary : .secondary)
+                .frame(width: 22, height: 22)
+                .background(isHovered ? Color.white.opacity(0.15) : Color.clear,
+                             in: RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .help(tooltip)
+        .onHover { isHovered = $0 }
+    }
+}
+
+struct ControlTextButton: View {
+    let text: String
+    let tooltip: String
+    let action: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        Button(action: action) {
+            Text(text)
                 .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(isHovered ? .primary : .secondary)
                 .frame(width: 22, height: 22)

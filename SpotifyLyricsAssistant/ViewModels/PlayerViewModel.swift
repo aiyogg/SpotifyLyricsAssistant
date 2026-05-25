@@ -40,6 +40,7 @@ final class PlayerViewModel: ObservableObject {
 
     // MARK: - Private
 
+    weak var settingsVM: SettingsViewModel?
     private let spotifyBridge = SpotifyBridge()
     private let lyricsCoordinator = LyricsCoordinator()
     private var cancellables = Set<AnyCancellable>()
@@ -152,12 +153,18 @@ final class PlayerViewModel: ObservableObject {
 
     // MARK: - Lyrics Line Sync
 
-    /// Updates the current highlighted lyrics line based on playback position.
     func updateCurrentLine(at position: Double) {
         guard let lyrics = lyrics, !lyrics.lines.isEmpty else { return }
 
-        // Find the last line whose timestamp <= current position
-        let newIndex = lyrics.lines.lastIndex(where: { $0.timestamp <= position }) ?? 0
+        // Apply manual time offset (e.g. +1.0 means lyrics are delayed by 1s, so we pretend position is 1s ahead)
+        // Wait, if lyricsOffsetSeconds = +0.5, it means lyrics should appear 0.5s later.
+        // So we subtract the offset from the position. If offset is +0.5, position 10.0 becomes 9.5.
+        // Therefore, timestamp 10.0 won't be reached until position 10.5.
+        let offset = settingsVM?.settings.lyricsOffsetSeconds ?? 0.0
+        let adjustedPosition = position - offset
+
+        // Find the last line whose timestamp <= adjusted position
+        let newIndex = lyrics.lines.lastIndex(where: { $0.timestamp <= adjustedPosition }) ?? 0
 
         guard newIndex != currentLineIndex else { return }
 

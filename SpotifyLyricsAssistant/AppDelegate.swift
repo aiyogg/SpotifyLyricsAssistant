@@ -44,6 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func setupFloatingPanel(playerVM: PlayerViewModel, settingsVM: SettingsViewModel) {
         self.playerViewModel = playerVM
         self.settingsViewModel = settingsVM
+        self.playerViewModel?.settingsVM = settingsVM
 
         floatingPanel = FloatingLyricsPanel()
 
@@ -52,7 +53,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .environmentObject(settingsVM)
 
         floatingPanel?.setContent(content)
-        floatingPanel?.alphaValue = settingsVM.settings.windowOpacity
 
         // Show if display mode includes floating window
         if settingsVM.settings.displayMode != .statusBarOnly {
@@ -76,9 +76,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func updatePanelOpacity(_ opacity: Double) {
-        floatingPanel?.alphaValue = opacity
-    }
+    // Transparency is now handled natively by SwiftUI .ultraThinMaterial
 
     func updatePanelLevel(_ level: LyricsWindowLevel) {
         floatingPanel?.applyWindowLevel(level)

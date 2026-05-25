@@ -15,7 +15,8 @@ struct LyricsScrollView: View {
                             isCurrent: index == player.currentLineIndex,
                             isPrevious: index == player.currentLineIndex - 1,
                             isNext: index == player.currentLineIndex + 1,
-                            fontSize: settings.settings.windowFontSize
+                            fontSize: settings.settings.windowFontSize,
+                            fontName: settings.settings.windowFontName
                         )
                         .id(line.id)
                     }
@@ -42,15 +43,25 @@ struct LyricsLineView: View {
     let isPrevious: Bool
     let isNext: Bool
     let fontSize: Double
+    var fontName: String = ""
 
     private var displayText: String {
         text.isEmpty ? "♪" : text
     }
 
+    private func makeFont(size: Double, weight: Font.Weight) -> Font {
+        if fontName.isEmpty {
+            return .system(size: size, weight: weight, design: .default)
+        } else {
+            // Use custom font name, fallback to system if unavailable
+            return Font.custom(fontName, size: size).weight(weight)
+        }
+    }
+
     var body: some View {
         Text(displayText)
-            .font(.system(size: effectiveFontSize, weight: fontWeight, design: .default))
-            .foregroundStyle(foregroundColor)
+            .font(makeFont(size: effectiveFontSize, weight: fontWeight))
+            .foregroundStyle(textForegroundStyle)
             .multilineTextAlignment(.center)
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
@@ -70,13 +81,13 @@ struct LyricsLineView: View {
         isCurrent ? .semibold : .regular
     }
 
-    private var foregroundColor: Color {
+    private var textForegroundStyle: AnyShapeStyle {
         if isCurrent {
-            return .white
+            return AnyShapeStyle(.primary)
         } else if isPrevious || isNext {
-            return .white.opacity(0.55)
+            return AnyShapeStyle(.secondary)
         } else {
-            return .white.opacity(0.28)
+            return AnyShapeStyle(.tertiary)
         }
     }
 }

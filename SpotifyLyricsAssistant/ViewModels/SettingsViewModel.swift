@@ -53,4 +53,9 @@ final class SettingsViewModel: ObservableObject {
         get { settings.lyricsOffsetSeconds }
         set { settings.lyricsOffsetSeconds = newValue }
     }
+
+    var windowFontName: String {
+        get { settings.windowFontName }
+        set { settings.windowFontName = newValue }
+    }
 }

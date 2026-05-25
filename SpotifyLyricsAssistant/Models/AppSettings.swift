@@ -11,6 +11,7 @@ struct AppSettings: Codable {
     // MARK: - Floating Window Appearance
     var windowOpacity: Double = 0.92
     var windowFontSize: Double = 22
+    var windowFontName: String = ""     // Empty = system default (SF Pro)
     var windowFrame: CGRect = CGRect(x: 100, y: 100, width: 520, height: 140)
     var colorScheme: LyricsColorScheme = .dark
     var windowLevel: LyricsWindowLevel = .floating
