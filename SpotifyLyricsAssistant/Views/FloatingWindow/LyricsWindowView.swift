@@ -213,18 +213,18 @@ struct WindowControlsOverlay: View {
 
                     Divider().frame(height: 14)
 
-                    // Time offset controls
-                    if settings.settings.lyricsOffsetSeconds != 0 {
-                        Text(String(format: "%+.1fs", settings.settings.lyricsOffsetSeconds))
+                    // Time offset controls (local to current track)
+                    if player.trackOffsetSeconds != 0 {
+                        Text(String(format: "%+.1fs", player.trackOffsetSeconds))
                             .font(.system(size: 11, weight: .medium, design: .monospaced))
                             .foregroundStyle(.secondary)
                     }
-                    ControlTextButton(text: "快", tooltip: "歌词提前0.5秒") {
-                        settings.settings.lyricsOffsetSeconds -= 0.5
+                    ControlTextButton(text: "快", tooltip: "当前歌词提前0.5秒") {
+                        player.trackOffsetSeconds -= 0.5
                         player.updateCurrentLine(at: player.playerPosition)
                     }
-                    ControlTextButton(text: "慢", tooltip: "歌词延后0.5秒") {
-                        settings.settings.lyricsOffsetSeconds += 0.5
+                    ControlTextButton(text: "慢", tooltip: "当前歌词延后0.5秒") {
+                        player.trackOffsetSeconds += 0.5
                         player.updateCurrentLine(at: player.playerPosition)
                     }
 

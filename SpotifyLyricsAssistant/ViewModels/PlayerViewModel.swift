@@ -17,6 +17,10 @@ final class PlayerViewModel: ObservableObject {
     @Published var isLoadingLyrics: Bool = false
     @Published var lyricsError: String? = nil
     @Published var isSpotifyRunning: Bool = false
+    
+    // Per-track manual offset (seconds). Applied on top of global settings offset.
+    // Resets to 0 automatically when the track changes.
+    @Published var trackOffsetSeconds: Double = 0
 
     // MARK: - Computed
 
@@ -132,6 +136,7 @@ final class PlayerViewModel: ObservableObject {
         lyrics = nil
         lyricsError = nil
         currentLineIndex = 0
+        trackOffsetSeconds = 0  // Reset local offset for the new track
         isLoadingLyrics = true
 
         fetchTask = Task {
@@ -156,12 +161,13 @@ final class PlayerViewModel: ObservableObject {
     func updateCurrentLine(at position: Double) {
         guard let lyrics = lyrics, !lyrics.lines.isEmpty else { return }
 
-        // Apply manual time offset (e.g. +1.0 means lyrics are delayed by 1s, so we pretend position is 1s ahead)
-        // Wait, if lyricsOffsetSeconds = +0.5, it means lyrics should appear 0.5s later.
-        // So we subtract the offset from the position. If offset is +0.5, position 10.0 becomes 9.5.
-        // Therefore, timestamp 10.0 won't be reached until position 10.5.
-        let offset = settingsVM?.settings.lyricsOffsetSeconds ?? 0.0
-        let adjustedPosition = position - offset
+        // Apply time offsets:
+        // Global offset (from settings) + Local track offset (from floating window)
+        // E.g., if offset is +0.5, it means lyrics should appear 0.5s later.
+        // So we subtract the offset from the position.
+        let globalOffset = settingsVM?.settings.lyricsOffsetSeconds ?? 0.0
+        let totalOffset = globalOffset + trackOffsetSeconds
+        let adjustedPosition = position - totalOffset
 
         // Find the last line whose timestamp <= adjusted position
         let newIndex = lyrics.lines.lastIndex(where: { $0.timestamp <= adjustedPosition }) ?? 0
