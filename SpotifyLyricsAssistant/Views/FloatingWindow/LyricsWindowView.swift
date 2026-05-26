@@ -45,9 +45,6 @@ struct LyricsWindowView: View {
         }
         // Window-level opacity (applied via SwiftUI so glass effect still works)
         .opacity(settings.settings.windowOpacity)
-        // Force glass effect to always appear "active" even when this panel
-        // is not the key window (otherwise glassEffect goes dark/inactive)
-        .environment(\.controlActiveState, .active)
         .frame(minWidth: 250, minHeight: 60)
     }
 }
@@ -57,38 +54,52 @@ struct LyricsWindowView: View {
 struct GlassBackground: View {
     var body: some View {
         if #available(macOS 26.0, *) {
-            // Native Liquid Glass (macOS 26 Tahoe)
-            // .glassEffect handles its own shape, border, and blur — no extra layers needed
             Color.clear
-                .glassEffect(.regular, in: .rect(cornerRadius: 16))
+                .glassEffect(.clear.interactive(), in: .rect(cornerRadius: 16))
+                // 1. Top-edge inner glow: Simulates light hitting the top edge of the glass block
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.35), location: 0),
+                                    .init(color: .white.opacity(0.0), location: 0.2)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1
+                        )
+                        .blendMode(.overlay)
+                )
+                // 2. Outer refraction rim: Simulates the bevel/edge of physical glass
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .white.opacity(0.25), location: 0),
+                                    .init(color: .white.opacity(0.02), location: 0.5),
+                                    .init(color: .white.opacity(0.15), location: 1)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 0.5
+                        )
+                )
         } else {
-            // Fallback for macOS 15 and earlier
-            ZStack {
-                VisualEffectView()
-                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
-            }
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Color.primary.opacity(0.08), lineWidth: 0.5)
+                )
         }
     }
 }
 
-// MARK: - Visual Effect fallback (macOS 15 and below)
 
-struct VisualEffectView: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.material = .sidebar
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.wantsLayer = true
-        view.layer?.cornerRadius = 16
-        view.layer?.masksToBounds = true
-        return view
-    }
-
-    func updateNSView(_ view: NSVisualEffectView, context: Context) {}
-}
 
 // MARK: - No Lyrics / Error View
 

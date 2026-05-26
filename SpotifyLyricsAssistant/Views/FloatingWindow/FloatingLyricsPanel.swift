@@ -30,9 +30,8 @@ final class FloatingLyricsPanel: NSPanel {
         // Visual
         isOpaque = false
         backgroundColor = .clear
-        // On macOS 26+, glassEffect renders its own shadow/glow.
-        // Keeping hasShadow=true causes a rectangular NSPanel shadow that
-        // conflicts with the glass's rounded corners, creating a double-border.
+        // glassEffect renders its own drop shadow; a system shadow creates
+        // a double-shadow artifact around the rounded corners.
         hasShadow = false
 
         // Always on top
@@ -61,11 +60,9 @@ final class FloatingLyricsPanel: NSPanel {
         hosting.wantsLayer = true
         hosting.layer?.backgroundColor = .clear
         hosting.layer?.isOpaque = false
-        // Clip the hosting view layer to the same rounded rect as glassEffect.
-        // This physically prevents any background bleed from rendering outside
-        // the rounded corners — the root cause of the faint gray rectangle.
+        // Clip to the same rounded rect as glassEffect so no bleed outside corners.
         hosting.layer?.cornerRadius = 16
-        hosting.layer?.cornerCurve = .continuous  // matches SwiftUI's .continuous style
+        hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
         contentView = hosting
         hostingView = hosting

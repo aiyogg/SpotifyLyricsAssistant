@@ -62,6 +62,9 @@ struct LyricsLineView: View {
         Text(displayText)
             .font(makeFont(size: effectiveFontSize, weight: fontWeight))
             .foregroundStyle(textForegroundStyle)
+            // Shadow ensures readability against any background color showing
+            // through the transparent glass (white page, dark editor, etc.)
+            .shadow(color: .black.opacity(isCurrent ? 0.55 : 0.35), radius: 3, x: 0, y: 1)
             .multilineTextAlignment(.center)
             .lineLimit(nil)
             .fixedSize(horizontal: false, vertical: true)
