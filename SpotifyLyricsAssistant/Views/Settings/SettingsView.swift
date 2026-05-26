@@ -186,7 +186,8 @@ struct AdvancedSettingsView: View {
             }
 
             Section("关于") {
-                LabeledContent("版本", value: "1.0.0")
+                let appVersion = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "未知"
+                LabeledContent("版本", value: appVersion)
                 LabeledContent("歌词来源", value: "LRCLib · 网易云 · QQ音乐")
             }
         }
