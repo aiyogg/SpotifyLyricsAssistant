@@ -14,11 +14,20 @@ actor LyricsCoordinator {
         self.cache = cache
     }
 
+    // MARK: - Private Helpers
+
+    /// Returns providers reordered by `priority`, with any unlisted providers appended at the end.
+    private func orderedProviders(by priority: [LyricsSource]) -> [any LyricsProvider] {
+        let ordered = priority.compactMap { source in providers.first { $0.source == source } }
+        let remaining = providers.filter { p in !priority.contains(p.source) }
+        return ordered + remaining
+    }
+
     // MARK: - Public API
 
-    /// Fetches lyrics for the given track.
-    /// Returns nil if no lyrics are found from any provider.
-    func fetchLyrics(for track: Track) async -> LyricsResult? {
+    /// Fetches lyrics for the given track, respecting the given source priority order.
+    /// Checks the local cache before making any network requests.
+    func fetchLyrics(for track: Track, priority: [LyricsSource] = []) async -> LyricsResult? {
         // 1. Check cache first
         if let cached = await cache.get(for: track.spotifyURI) {
             print("[LyricsCoordinator] Cache hit for: \(track.name)")
@@ -30,8 +39,9 @@ actor LyricsCoordinator {
             )
         }
 
-        // 2. Try each provider in priority order
-        for provider in providers {
+        // 2. Try each provider in the requested priority order
+        let ordered = priority.isEmpty ? providers : orderedProviders(by: priority)
+        for provider in ordered {
             let providerName = provider.name
             let providerSource = provider.source
             do {
@@ -39,7 +49,6 @@ actor LyricsCoordinator {
                 let result = try await provider.fetchLyrics(for: track)
                 print("[LyricsCoordinator] Success from \(providerName): \(result.lines.count) lines")
 
-                // Store in cache for next time
                 await cache.store(result, for: track.spotifyURI)
                 return result
 
@@ -51,7 +60,6 @@ actor LyricsCoordinator {
                 continue
             } catch LyricsProviderError.unsupportedTrack {
                 print("[LyricsCoordinator] Instrumental track detected by \(providerName)")
-                // Store empty result to avoid re-fetching instrumental tracks
                 let emptyResult = LyricsResult(lines: [], source: providerSource, isSynced: false, trackURI: track.spotifyURI)
                 await cache.store(emptyResult, for: track.spotifyURI)
                 return emptyResult
@@ -65,17 +73,20 @@ actor LyricsCoordinator {
         return nil
     }
 
-    /// Fetches lyrics skipping a specific provider, then wrapping around.
-    /// The provider order is: all providers starting from the one *after* skippedSource,
-    /// cycling back through the beginning. Does not read from cache; writes on success.
-    func fetchLyrics(for track: Track, skippingSource: LyricsSource) async -> LyricsResult? {
+    /// Fetches lyrics skipping a specific provider, then wrapping around in priority order.
+    /// `priority` must match the same ordering used by `nextReloadSource` in the view model
+    /// so that the displayed "next source" matches what actually gets tried.
+    /// Does not read from cache; writes on success.
+    func fetchLyrics(for track: Track, skippingSource: LyricsSource, priority: [LyricsSource]) async -> LyricsResult? {
         guard !providers.isEmpty else { return nil }
 
-        // Build a rotated provider list: start from the provider after skippedSource
-        let skipIndex = providers.firstIndex(where: { $0.source == skippingSource }) ?? -1
-        let startIndex = (skipIndex + 1) % providers.count
-        let indices = Array(startIndex..<providers.count) + Array(0..<startIndex)
-        let orderedProviders = indices.map { providers[$0] }
+        // Reorder providers according to the caller-supplied priority, then rotate
+        // past the skipped source so the next one is tried first.
+        let allOrdered = orderedProviders(by: priority)
+        let skipIndex = allOrdered.firstIndex(where: { $0.source == skippingSource }) ?? -1
+        let startIndex = (skipIndex + 1) % allOrdered.count
+        let indices = Array(startIndex..<allOrdered.count) + Array(0..<startIndex)
+        let orderedProviders = indices.map { allOrdered[$0] }
 
         for provider in orderedProviders {
             let providerName = provider.name
@@ -107,28 +118,8 @@ actor LyricsCoordinator {
         return nil
     }
 
-    /// Returns the source that would be tried first if skipping `currentSource`.
-    func nextSource(after currentSource: LyricsSource) -> LyricsSource? {
-        guard providers.count > 1 else { return providers.first?.source }
-        let skipIndex = providers.firstIndex(where: { $0.source == currentSource }) ?? -1
-        let nextIndex = (skipIndex + 1) % providers.count
-        return providers[nextIndex].source
-    }
-
     /// Clears the lyrics cache.
     func clearCache() async {
         await cache.clearAll()
-    }
-
-    /// Updates the provider order based on user settings.
-    /// Returns a new coordinator with the updated provider list.
-    func reordered(by priority: [LyricsSource]) -> LyricsCoordinator {
-        let ordered = priority.compactMap { source in
-            providers.first { $0.source == source }
-        }
-        let remaining = providers.filter { provider in
-            !priority.contains(provider.source)
-        }
-        return LyricsCoordinator(providers: ordered + remaining, cache: cache)
     }
 }

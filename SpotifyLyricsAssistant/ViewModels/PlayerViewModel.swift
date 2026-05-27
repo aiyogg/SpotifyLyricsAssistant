@@ -148,7 +148,8 @@ final class PlayerViewModel: ObservableObject {
         isLoadingLyrics = true
 
         fetchTask = Task {
-            let result = await lyricsCoordinator.fetchLyrics(for: track)
+            let priority = self.settingsVM?.settings.lyricsSourcePriority ?? [.lrclib, .netease, .qqMusic]
+            let result = await lyricsCoordinator.fetchLyrics(for: track, priority: priority)
 
             guard !Task.isCancelled else { return }
 
@@ -219,8 +220,10 @@ final class PlayerViewModel: ObservableObject {
             let result: LyricsResult?
 
             if let lastSource = lastSource, lastSource != .cache {
-                // Skip the source that just delivered (possibly wrong) lyrics
-                result = await lyricsCoordinator.fetchLyrics(for: track, skippingSource: lastSource)
+                // Skip the source that just delivered (possibly wrong) lyrics.
+                // Pass the same priority used by nextReloadSource so display and fetch stay in sync.
+                let priority = self.settingsVM?.settings.lyricsSourcePriority ?? [.lrclib, .netease, .qqMusic]
+                result = await lyricsCoordinator.fetchLyrics(for: track, skippingSource: lastSource, priority: priority)
             } else {
                 // No prior source (e.g., failed state): clear cache and start fresh
                 await lyricsCoordinator.clearCache()
