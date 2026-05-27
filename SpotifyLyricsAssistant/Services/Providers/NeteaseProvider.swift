@@ -1,39 +1,59 @@
 import Foundation
 
 /// Fetches synchronized lyrics from Netease Cloud Music (网易云音乐)
-/// Uses a public proxy API that handles Netease's request signing.
+/// Uses the official music.163.com API directly — no third-party proxy required.
 final class NeteaseProvider: LyricsProvider {
     let name = "网易云音乐"
     let source = LyricsSource.netease
 
     private let session: URLSession
-    // Public proxy instances for the NeteaseCloudMusicApi project
-    private let searchBase = "https://music.xianqiao.wang/neteaseapiv2"
+
+    // Official Netease API base URL
+    private let baseURL = "https://music.163.com"
+
+    // Headers required by the official API to accept requests
+    private let headers: [String: String] = [
+        "Referer": "music.163.com",
+        "User-Agent": "Mozilla/5.0 (Linux; Android 11; M2007J3SC Build/RKQ1.200826.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/77.0.3865.120 Mobile Safari/537.36 NeteaseMusic/8.7.01",
+        "Accept": "*/*",
+        "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7"
+    ]
 
     init(session: URLSession = .shared) {
         self.session = session
     }
 
     func fetchLyrics(for track: Track) async throws -> LyricsResult {
-        // Step 1: Search for the song
         let songID = try await searchSong(track: track)
-
-        // Step 2: Fetch lyrics by song ID
         return try await fetchLyricsForID(songID, track: track)
     }
 
     // MARK: - Search
 
     private func searchSong(track: Track) async throws -> Int {
-        let query = "\(track.artist) \(track.name)"
-            .addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? track.name
-
-        guard let url = URL(string: "\(searchBase)/search?limit=5&type=1&keywords=\(query)") else {
+        guard let url = URL(string: "\(baseURL)/api/cloudsearch/pc") else {
             throw LyricsProviderError.parseError("Invalid search URL")
         }
 
+        let keyword = "\(track.artist) \(track.name)"
+
         var request = URLRequest(url: url)
+        request.httpMethod = "POST"
         request.timeoutInterval = 10
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
+        request.setValue("application/x-www-form-urlencoded", forHTTPHeaderField: "Content-Type")
+
+        let bodyParams = [
+            "s": keyword,
+            "type": "1",
+            "limit": "5",
+            "total": "true",
+            "offset": "0"
+        ]
+        request.httpBody = bodyParams
+            .map { "\($0.key)=\($0.value.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? $0.value)" }
+            .joined(separator: "&")
+            .data(using: .utf8)
 
         let (data, response) = try await session.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
@@ -45,14 +65,16 @@ final class NeteaseProvider: LyricsProvider {
             throw LyricsProviderError.notFound
         }
 
-        // Find the best matching song by comparing artist name
+        // Best match: prefer songs where both artist and name match
         let trackArtistLower = track.artist.lowercased()
         let trackNameLower = track.name.lowercased()
 
         let best = songs.first { song in
-            let artistMatch = song.artists?.first?.name.lowercased().contains(trackArtistLower) ?? false
+            let artistMatch = song.ar?.first?.name.lowercased().contains(trackArtistLower) ?? false
             let nameMatch = song.name.lowercased().contains(trackNameLower)
-            return artistMatch || nameMatch
+            return artistMatch && nameMatch
+        } ?? songs.first { song in
+            song.name.lowercased().contains(trackNameLower)
         } ?? songs.first
 
         guard let match = best else {
@@ -64,12 +86,14 @@ final class NeteaseProvider: LyricsProvider {
     // MARK: - Lyric Fetch
 
     private func fetchLyricsForID(_ id: Int, track: Track) async throws -> LyricsResult {
-        guard let url = URL(string: "\(searchBase)/lyric?id=\(id)") else {
+        // lv=1: use the best available version; kv=1: karaoke; tv=-1: no translation required
+        guard let url = URL(string: "\(baseURL)/api/song/lyric?id=\(id)&lv=1&kv=1&tv=-1") else {
             throw LyricsProviderError.parseError("Invalid lyrics URL")
         }
 
         var request = URLRequest(url: url)
         request.timeoutInterval = 10
+        headers.forEach { request.setValue($1, forHTTPHeaderField: $0) }
 
         let (data, response) = try await session.data(for: request)
         guard (response as? HTTPURLResponse)?.statusCode == 200 else {
@@ -101,11 +125,12 @@ private struct NeteaseSearchResultData: Decodable {
     let songs: [NeteaseSong]?
 }
 
+/// cloudsearch/pc returns artists as "ar", not "artists"
 private struct NeteaseSong: Decodable {
     let id: Int
     let name: String
-    let artists: [NeteaseArtist]?
-    let duration: Int?
+    let ar: [NeteaseArtist]?
+    let dt: Int?  // duration in ms
 }
 
 private struct NeteaseArtist: Decodable {
@@ -114,7 +139,7 @@ private struct NeteaseArtist: Decodable {
 
 private struct NeteaseLyricResult: Decodable {
     let lrc: NeteaseLRC?
-    let tlyric: NeteaseLRC?  // Translation lyrics (if available)
+    let tlyric: NeteaseLRC?  // Translation (if available)
 }
 
 private struct NeteaseLRC: Decodable {
