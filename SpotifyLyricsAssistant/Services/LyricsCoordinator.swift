@@ -65,6 +65,56 @@ actor LyricsCoordinator {
         return nil
     }
 
+    /// Fetches lyrics skipping a specific provider, then wrapping around.
+    /// The provider order is: all providers starting from the one *after* skippedSource,
+    /// cycling back through the beginning. Does not read from cache; writes on success.
+    func fetchLyrics(for track: Track, skippingSource: LyricsSource) async -> LyricsResult? {
+        guard !providers.isEmpty else { return nil }
+
+        // Build a rotated provider list: start from the provider after skippedSource
+        let skipIndex = providers.firstIndex(where: { $0.source == skippingSource }) ?? -1
+        let startIndex = (skipIndex + 1) % providers.count
+        let indices = Array(startIndex..<providers.count) + Array(0..<startIndex)
+        let orderedProviders = indices.map { providers[$0] }
+
+        for provider in orderedProviders {
+            let providerName = provider.name
+            let providerSource = provider.source
+            do {
+                print("[LyricsCoordinator] (skip-rotate) Trying \(providerName) for: \(track.name)")
+                let result = try await provider.fetchLyrics(for: track)
+                print("[LyricsCoordinator] (skip-rotate) Success from \(providerName): \(result.lines.count) lines")
+                await cache.store(result, for: track.spotifyURI)
+                return result
+            } catch LyricsProviderError.notFound {
+                print("[LyricsCoordinator] (skip-rotate) Not found in \(providerName), trying next...")
+                continue
+            } catch LyricsProviderError.rateLimited {
+                print("[LyricsCoordinator] (skip-rotate) Rate limited by \(providerName), skipping...")
+                continue
+            } catch LyricsProviderError.unsupportedTrack {
+                print("[LyricsCoordinator] (skip-rotate) Instrumental detected by \(providerName)")
+                let emptyResult = LyricsResult(lines: [], source: providerSource, isSynced: false, trackURI: track.spotifyURI)
+                await cache.store(emptyResult, for: track.spotifyURI)
+                return emptyResult
+            } catch {
+                print("[LyricsCoordinator] (skip-rotate) Error from \(providerName): \(error.localizedDescription)")
+                continue
+            }
+        }
+
+        print("[LyricsCoordinator] (skip-rotate) No lyrics found from any provider for: \(track.name)")
+        return nil
+    }
+
+    /// Returns the source that would be tried first if skipping `currentSource`.
+    func nextSource(after currentSource: LyricsSource) -> LyricsSource? {
+        guard providers.count > 1 else { return providers.first?.source }
+        let skipIndex = providers.firstIndex(where: { $0.source == currentSource }) ?? -1
+        let nextIndex = (skipIndex + 1) % providers.count
+        return providers[nextIndex].source
+    }
+
     /// Clears the lyrics cache.
     func clearCache() async {
         await cache.clearAll()

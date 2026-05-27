@@ -17,6 +17,14 @@ final class PlayerViewModel: ObservableObject {
     @Published var isLoadingLyrics: Bool = false
     @Published var lyricsError: String? = nil
     @Published var isSpotifyRunning: Bool = false
+    /// The source that will be tried first on the next reload.
+    /// Derived synchronously from the current lyrics source and the settings priority order.
+    var nextReloadSource: LyricsSource? {
+        guard let currentSource = lyrics?.source, currentSource != .cache else { return nil }
+        let priority = settingsVM?.settings.lyricsSourcePriority ?? [.lrclib, .netease, .qqMusic]
+        guard let idx = priority.firstIndex(of: currentSource) else { return priority.first }
+        return priority[(idx + 1) % priority.count]
+    }
     
     // Per-track manual offset (seconds). Applied on top of global settings offset.
     // Resets to 0 automatically when the track changes.
@@ -181,11 +189,55 @@ final class PlayerViewModel: ObservableObject {
 
     // MARK: - Manual Controls
 
-    /// Reloads lyrics for the current track (bypasses cache).
+    /// Dynamic tooltip for the "reload lyrics" button.
+    /// Shows the current source and the next source that will be tried.
+    var reloadTooltip: String {
+        guard let currentSource = lyrics?.source,
+              currentSource != .cache,
+              nextReloadSource != nil else {
+            return "重新获取歌词"
+        }
+        return "切换来源重新获取"
+    }
+
+    /// Reloads lyrics for the current track by skipping the last-used source
+    /// and cycling to the next provider. If there was no prior source, clears
+    /// cache and re-fetches from the top of the priority list.
     func reloadLyrics() async {
         guard let track = currentTrack else { return }
-        await lyricsCoordinator.clearCache()
-        await handleTrackChange(to: track)
+
+        let lastSource = lyrics?.source
+
+        // Cancel any in-progress fetch
+        fetchTask?.cancel()
+        lyrics = nil
+        lyricsError = nil
+        currentLineIndex = 0
+        isLoadingLyrics = true
+
+        fetchTask = Task {
+            let result: LyricsResult?
+
+            if let lastSource = lastSource, lastSource != .cache {
+                // Skip the source that just delivered (possibly wrong) lyrics
+                result = await lyricsCoordinator.fetchLyrics(for: track, skippingSource: lastSource)
+            } else {
+                // No prior source (e.g., failed state): clear cache and start fresh
+                await lyricsCoordinator.clearCache()
+                result = await lyricsCoordinator.fetchLyrics(for: track)
+            }
+
+            guard !Task.isCancelled else { return }
+
+            if let result = result {
+                self.lyrics = result
+                self.lyricsError = nil
+                self.updateCurrentLine(at: self.playerPosition)
+            } else {
+                self.lyricsError = "所有来源均无歌词"
+            }
+            self.isLoadingLyrics = false
+        }
     }
 
     /// Clears all cached lyrics.

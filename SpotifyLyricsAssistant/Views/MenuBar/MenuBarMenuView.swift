@@ -44,7 +44,7 @@ struct MenuBarMenuView: View {
 
             // Actions
             VStack(alignment: .leading, spacing: 2) {
-                MenuRow(title: "重新获取歌词", systemImage: "arrow.clockwise") {
+                MenuRow(title: player.reloadTooltip, systemImage: "arrow.clockwise") {
                     Task { await player.reloadLyrics() }
                 }
                 MenuRow(title: "设置...", systemImage: "gearshape") {
@@ -64,6 +64,12 @@ struct MenuBarMenuView: View {
                         .foregroundStyle(.tertiary)
                         .padding(.horizontal, 16)
                         .padding(.top, 8)
+                    if let next = player.nextReloadSource {
+                        Text("重获时将切换至：\(next.rawValue)")
+                            .font(.caption)
+                            .foregroundStyle(.quaternary)
+                            .padding(.horizontal, 16)
+                    }
                 }
                 .padding(.bottom, 4)
             }

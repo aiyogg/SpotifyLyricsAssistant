@@ -206,8 +206,8 @@ struct WindowControlsOverlay: View {
             HStack {
                 Spacer()
                 HStack(spacing: 6) {
-                    // Reload lyrics
-                    ControlButton(icon: "arrow.clockwise", tooltip: "重新加载歌词") {
+                    // Reload lyrics (cycles to next source)
+                    ControlButton(icon: "arrow.clockwise", tooltip: player.reloadTooltip) {
                         Task { await player.reloadLyrics() }
                     }
 
