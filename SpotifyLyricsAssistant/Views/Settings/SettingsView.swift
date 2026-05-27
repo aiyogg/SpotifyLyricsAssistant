@@ -57,15 +57,25 @@ struct SettingsView: View {
 struct AppearanceSettingsView: View {
     @EnvironmentObject var settings: SettingsViewModel
 
+    // Local state buffers the Picker value so that writing back to the
+    // @Published settings happens outside the current view-update cycle,
+    // avoiding "Publishing changes from within view updates" runtime warnings.
+    @State private var displayMode: DisplayMode = .floatingWindow
+
     var body: some View {
         Form {
             Section("显示模式") {
-                Picker("模式", selection: $settings.settings.displayMode) {
+                Picker("模式", selection: $displayMode) {
                     ForEach(DisplayMode.allCases, id: \.self) { mode in
                         Text(mode.rawValue).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
+                .onChange(of: displayMode) { newMode in
+                    DispatchQueue.main.async {
+                        settings.settings.displayMode = newMode
+                    }
+                }
             }
 
             Section("悬浮窗") {
@@ -101,6 +111,10 @@ struct AppearanceSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .onAppear {
+            // Sync local state from settings when the view appears
+            displayMode = settings.settings.displayMode
+        }
     }
 }
 

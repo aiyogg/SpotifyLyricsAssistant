@@ -33,7 +33,6 @@ struct MenuBarMenuView: View {
                         systemImage: displayModeIcon(mode)
                     ) {
                         settings.displayMode = mode
-                        handleDisplayModeChange(mode)
                     }
                 }
             }
@@ -92,24 +91,21 @@ struct MenuBarMenuView: View {
         }
     }
 
-    private func handleDisplayModeChange(_ mode: DisplayMode) {
-        let panel = NSApp.windows.first { $0 is FloatingLyricsPanel } as? FloatingLyricsPanel
-        switch mode {
-        case .floatingWindow, .both:
-            panel?.show()
-        case .statusBarOnly:
-            panel?.hide()
-        }
-    }
 
     private func openSettings() {
         // In .accessory policy apps, we must explicitly activate to show windows
         NSApp.activate(ignoringOtherApps: true)
 
-        // Reuse existing settings window if already open
+        // Reuse existing settings window if already open — force it to front
         if let settingsWindow = NSApp.windows.first(where: { $0.title == "设置" }) {
+            // Temporarily raise the level to guarantee it appears above all other windows,
+            // then restore to normal so it doesn't permanently float above everything.
+            settingsWindow.level = .floating
             settingsWindow.orderFrontRegardless()
             settingsWindow.makeKeyAndOrderFront(nil)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                settingsWindow.level = .normal
+            }
             return
         }
 

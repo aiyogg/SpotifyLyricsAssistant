@@ -25,6 +25,8 @@ final class SettingsViewModel: ObservableObject {
         if let data = try? JSONEncoder().encode(settings) {
             defaults.set(data, forKey: settingsKey)
         }
+        // Notify the rest of the app (like AppDelegate and App struct)
+        NotificationCenter.default.post(name: .settingsDidChange, object: nil)
     }
 
     // MARK: - Convenience Accessors

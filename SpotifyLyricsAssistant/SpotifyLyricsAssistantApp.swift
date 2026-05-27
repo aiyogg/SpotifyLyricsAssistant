@@ -50,16 +50,26 @@ struct SpotifyLyricsAssistantApp: App {
     // MARK: - Settings Observer
 
     private func setupSettingsObserver() {
-        // Observe settings changes to update panel in real time
-        // We use NotificationCenter as a simple bridge since we can't store
-        // cancellables in a struct (App is a struct in SwiftUI)
+        // Observe settings changes to update panel in real time.
+        // Centralised here so ANY source that writes to settings
+        // (Settings view, MenuBar, etc.) automatically drives the panel.
         NotificationCenter.default.addObserver(
             forName: .settingsDidChange,
             object: nil,
             queue: .main
         ) { _ in
-            let s = settings.settings
-            appDelegate.updatePanelLevel(s.windowLevel)
+            Task { @MainActor in
+                let s = settings.settings
+                appDelegate.updatePanelLevel(s.windowLevel)
+
+                // Drive floating panel visibility from displayMode
+                switch s.displayMode {
+                case .floatingWindow, .both:
+                    appDelegate.showFloatingPanel()
+                case .statusBarOnly:
+                    appDelegate.hideFloatingPanel()
+                }
+            }
         }
     }
 }
