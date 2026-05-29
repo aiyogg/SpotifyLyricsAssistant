@@ -19,6 +19,9 @@ struct LyricsScrollView: View {
                             fontName: settings.settings.windowFontName
                         )
                         .id(line.id)
+                        .onTapGesture(count: 2) {
+                            player.seek(to: line.timestamp)
+                        }
                     }
                 }
                 .padding(.vertical, 16)

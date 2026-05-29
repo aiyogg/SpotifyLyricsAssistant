@@ -247,4 +247,22 @@ final class PlayerViewModel: ObservableObject {
     func clearLyricsCache() async {
         await lyricsCoordinator.clearCache()
     }
+
+    /// Seeks the Spotify playback to match the given raw lyrics timestamp,
+    /// compensating for any manual offset the user has set.
+    func seek(to rawLyricsTime: Double) {
+        // We must apply the offset in reverse. If the user set a +5.0s offset,
+        // it means the lyrics are shown 5s late. To hear the music that corresponds
+        // to this lyric, we must seek to rawLyricsTime + 5.0.
+        let globalOffset = settingsVM?.settings.lyricsOffsetSeconds ?? 0.0
+        let totalOffset = globalOffset + trackOffsetSeconds
+        let targetPosition = max(0, rawLyricsTime + totalOffset)
+
+        Task {
+            await spotifyBridge.seek(to: targetPosition)
+            // Optimistically update the player position and UI
+            self.playerPosition = targetPosition
+            self.updateCurrentLine(at: targetPosition)
+        }
+    }
 }

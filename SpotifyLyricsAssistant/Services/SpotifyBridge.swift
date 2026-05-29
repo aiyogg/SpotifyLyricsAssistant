@@ -84,6 +84,20 @@ actor SpotifyBridge {
         return Double(trimmed)
     }
 
+    /// Seeks the Spotify player to a specific timestamp in seconds.
+    func seek(to seconds: Double) async {
+        guard isSpotifyProcessRunning() else { return }
+
+        let script = """
+        if application "Spotify" is running then
+            tell application "Spotify"
+                set player position to \(seconds)
+            end tell
+        end if
+        """
+        _ = await runAppleScript(script)
+    }
+
     /// Checks if Spotify is currently running using NSRunningApplication (no AppleScript, no permissions needed).
     func isSpotifyRunning() async -> Bool {
         return isSpotifyProcessRunning()
