@@ -87,14 +87,32 @@ actor SpotifyBridge {
     /// Seeks the Spotify player to a specific timestamp in seconds.
     func seek(to seconds: Double) async {
         guard isSpotifyProcessRunning() else { return }
-
         let script = """
         if application "Spotify" is running then
-            tell application "Spotify"
-                set player position to \(seconds)
-            end tell
+            tell application "Spotify" to set player position to \(seconds)
         end if
         """
+        _ = await runAppleScript(script)
+    }
+
+    /// Toggles play/pause state.
+    func togglePlayPause() async {
+        guard isSpotifyProcessRunning() else { return }
+        let script = "if application \"Spotify\" is running then tell application \"Spotify\" to playpause"
+        _ = await runAppleScript(script)
+    }
+
+    /// Skips to the next track.
+    func nextTrack() async {
+        guard isSpotifyProcessRunning() else { return }
+        let script = "if application \"Spotify\" is running then tell application \"Spotify\" to next track"
+        _ = await runAppleScript(script)
+    }
+
+    /// Skips to the previous track.
+    func previousTrack() async {
+        guard isSpotifyProcessRunning() else { return }
+        let script = "if application \"Spotify\" is running then tell application \"Spotify\" to previous track"
         _ = await runAppleScript(script)
     }
 

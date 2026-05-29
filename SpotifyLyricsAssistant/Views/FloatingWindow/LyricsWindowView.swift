@@ -37,6 +37,13 @@ struct LyricsWindowView: View {
                     .environmentObject(settings)
                     .transition(.opacity)
             }
+
+            // Hidden button to catch Spacebar for Play/Pause when the window is focused
+            Button("") {
+                player.togglePlayPause()
+            }
+            .keyboardShortcut(.space, modifiers: [])
+            .opacity(0)
         }
         .onHover { hovering in
             withAnimation(.easeInOut(duration: 0.2)) {
@@ -46,6 +53,13 @@ struct LyricsWindowView: View {
         // Window-level opacity (applied via SwiftUI so glass effect still works)
         .opacity(settings.settings.windowOpacity)
         .frame(minWidth: 250, minHeight: 60)
+        // Listen to swipe gestures from the NSPanel
+        .onReceive(NotificationCenter.default.publisher(for: .lyricsPanelDidSwipeLeft)) { _ in
+            player.nextTrack()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lyricsPanelDidSwipeRight)) { _ in
+            player.previousTrack()
+        }
     }
 }
 

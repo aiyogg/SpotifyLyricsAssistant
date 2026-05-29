@@ -265,4 +265,19 @@ final class PlayerViewModel: ObservableObject {
             self.updateCurrentLine(at: targetPosition)
         }
     }
+
+    /// Toggles play/pause state in Spotify
+    func togglePlayPause() {
+        Task { await spotifyBridge.togglePlayPause() }
+    }
+
+    /// Skips to the next track in Spotify
+    func nextTrack() {
+        Task { await spotifyBridge.nextTrack() }
+    }
+
+    /// Skips to the previous track in Spotify
+    func previousTrack() {
+        Task { await spotifyBridge.previousTrack() }
+    }
 }

@@ -132,6 +132,56 @@ final class FloatingLyricsPanel: NSPanel {
     func hide() {
         orderOut(nil)
     }
+
+    // MARK: - Gestures & Events
+
+    private var swipeAccumulatorX: CGFloat = 0
+    private var hasTriggeredSwipe = false
+
+    override func sendEvent(_ event: NSEvent) {
+        if event.type == .scrollWheel {
+            // Is it primarily a horizontal scroll?
+            if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) && abs(event.scrollingDeltaX) > 0 {
+                handleHorizontalScroll(event)
+                // Consume horizontal scroll so the ScrollView doesn't receive it
+                return
+            }
+        }
+        
+        super.sendEvent(event)
+    }
+
+    private func handleHorizontalScroll(_ event: NSEvent) {
+        // Trackpad gesture phase tracking
+        if event.phase == .began || event.phase == .mayBegin {
+            swipeAccumulatorX = 0
+            hasTriggeredSwipe = false
+        }
+
+        // Sometimes phase is empty but momentumPhase is moving
+        if event.phase == .changed || event.phase == .ended || event.momentumPhase == .changed {
+            swipeAccumulatorX += event.scrollingDeltaX
+
+            if !hasTriggeredSwipe {
+                // macOS natural scrolling translates a two-finger swipe left into a positive scrollingDeltaX.
+                // Standard convention: Swipe Left = Next, Swipe Right = Previous.
+                if swipeAccumulatorX > 50 {
+                    // Swiped Left
+                    NotificationCenter.default.post(name: .lyricsPanelDidSwipeLeft, object: nil)
+                    hasTriggeredSwipe = true
+                } else if swipeAccumulatorX < -50 {
+                    // Swiped Right
+                    NotificationCenter.default.post(name: .lyricsPanelDidSwipeRight, object: nil)
+                    hasTriggeredSwipe = true
+                }
+            }
+        }
+    }
+}
+
+extension Notification.Name {
+    static let lyricsPanelDidSwipeLeft = Notification.Name("lyricsPanelDidSwipeLeft")
+    static let lyricsPanelDidSwipeRight = Notification.Name("lyricsPanelDidSwipeRight")
 }
 
 // MARK: - Helper
