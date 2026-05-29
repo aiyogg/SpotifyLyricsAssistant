@@ -191,6 +191,7 @@ private struct FontFamilyItem: Identifiable {
 struct WindowControlsOverlay: View {
     @EnvironmentObject var player: PlayerViewModel
     @EnvironmentObject var settings: SettingsViewModel
+    @AppStorage("isControlsExpanded") private var isExpanded = true
 
     // Computed once per hover — CoreText lookup is fast but we avoid calling it per render
     private let fontFamilies: [FontFamilyItem] = FontFamilyItem.allInstalled()
@@ -206,99 +207,110 @@ struct WindowControlsOverlay: View {
             HStack {
                 Spacer()
                 HStack(spacing: 6) {
-                    // Reload lyrics (cycles to next source)
-                    ControlButton(icon: "arrow.clockwise", tooltip: player.reloadTooltip) {
-                        Task { await player.reloadLyrics() }
-                    }
-
-                    Divider().frame(height: 14)
-
-                    // Time offset controls (local to current track)
-                    if player.trackOffsetSeconds != 0 {
-                        Text(String(format: "%+.1fs", player.trackOffsetSeconds))
-                            .font(.system(size: 11, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                    }
-                    ControlTextButton(text: "快", tooltip: "当前歌词提前0.5秒") {
-                        player.trackOffsetSeconds -= 0.5
-                        player.updateCurrentLine(at: player.playerPosition)
-                    }
-                    ControlTextButton(text: "慢", tooltip: "当前歌词延后0.5秒") {
-                        player.trackOffsetSeconds += 0.5
-                        player.updateCurrentLine(at: player.playerPosition)
-                    }
-
-                    Divider().frame(height: 14)
-
-                    // Opacity controls
-                    ControlButton(icon: "sun.min", tooltip: "降低透明度") {
-                        settings.settings.windowOpacity = max(0.2, settings.settings.windowOpacity - 0.1)
-                    }
-                    ControlButton(icon: "sun.max", tooltip: "提高透明度") {
-                        settings.settings.windowOpacity = min(1.0, settings.settings.windowOpacity + 0.1)
-                    }
-
-                    Divider().frame(height: 14)
-
-                    // Font size controls
-                    ControlButton(icon: "textformat.size.smaller", tooltip: "缩小字体") {
-                        settings.settings.windowFontSize = max(12, settings.settings.windowFontSize - 2)
-                    }
-                    ControlButton(icon: "textformat.size.larger", tooltip: "放大字体") {
-                        settings.settings.windowFontSize = min(48, settings.settings.windowFontSize + 2)
-                    }
-
-                    // Font picker
-                    Menu {
-                        // "系统默认" always at the top
-                        Button {
-                            settings.settings.windowFontName = ""
-                        } label: {
-                            HStack {
-                                Text("系统默认")
-                                if settings.settings.windowFontName.isEmpty {
-                                    Image(systemName: "checkmark")
-                                }
-                            }
+                    // Toggle expand/collapse
+                    ControlButton(icon: isExpanded ? "chevron.right" : "chevron.left", tooltip: isExpanded ? "收起操作栏" : "展开操作栏") {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            isExpanded.toggle()
                         }
-                        Divider()
-                        // All installed font families with localized display names
-                        ForEach(fontFamilies) { item in
+                    }
+
+                    if isExpanded {
+                        Divider().frame(height: 14)
+
+                        // Reload lyrics (cycles to next source)
+                        ControlButton(icon: "arrow.clockwise", tooltip: player.reloadTooltip) {
+                            Task { await player.reloadLyrics() }
+                        }
+
+                        Divider().frame(height: 14)
+
+                        // Time offset controls (local to current track)
+                        if player.trackOffsetSeconds != 0 {
+                            Text(String(format: "%+.1fs", player.trackOffsetSeconds))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                        }
+                        ControlTextButton(text: "快", tooltip: "当前歌词提前0.5秒") {
+                            player.trackOffsetSeconds -= 0.5
+                            player.updateCurrentLine(at: player.playerPosition)
+                        }
+                        ControlTextButton(text: "慢", tooltip: "当前歌词延后0.5秒") {
+                            player.trackOffsetSeconds += 0.5
+                            player.updateCurrentLine(at: player.playerPosition)
+                        }
+
+                        Divider().frame(height: 14)
+
+                        // Opacity controls
+                        ControlButton(icon: "sun.min", tooltip: "降低透明度") {
+                            settings.settings.windowOpacity = max(0.2, settings.settings.windowOpacity - 0.1)
+                        }
+                        ControlButton(icon: "sun.max", tooltip: "提高透明度") {
+                            settings.settings.windowOpacity = min(1.0, settings.settings.windowOpacity + 0.1)
+                        }
+
+                        Divider().frame(height: 14)
+
+                        // Font size controls
+                        ControlButton(icon: "textformat.size.smaller", tooltip: "缩小字体") {
+                            settings.settings.windowFontSize = max(12, settings.settings.windowFontSize - 2)
+                        }
+                        ControlButton(icon: "textformat.size.larger", tooltip: "放大字体") {
+                            settings.settings.windowFontSize = min(48, settings.settings.windowFontSize + 2)
+                        }
+
+                        // Font picker
+                        Menu {
+                            // "系统默认" always at the top
                             Button {
-                                // Store internal family name (used by Font.custom)
-                                settings.settings.windowFontName = item.id
+                                settings.settings.windowFontName = ""
                             } label: {
                                 HStack {
-                                    // Show user-friendly localized name
-                                    Text(item.displayName)
-                                    if settings.settings.windowFontName == item.id {
+                                    Text("系统默认")
+                                    if settings.settings.windowFontName.isEmpty {
                                         Image(systemName: "checkmark")
                                     }
                                 }
                             }
+                            Divider()
+                            // All installed font families with localized display names
+                            ForEach(fontFamilies) { item in
+                                Button {
+                                    // Store internal family name (used by Font.custom)
+                                    settings.settings.windowFontName = item.id
+                                } label: {
+                                    HStack {
+                                        // Show user-friendly localized name
+                                        Text(item.displayName)
+                                        if settings.settings.windowFontName == item.id {
+                                            Image(systemName: "checkmark")
+                                        }
+                                    }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 2) {
+                                Image(systemName: "textformat")
+                                    .font(.system(size: 11, weight: .medium))
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 8, weight: .medium))
+                            }
+                            .foregroundStyle(.secondary)
+                            .frame(height: 22)
+                            .padding(.horizontal, 4)
+                            .background(Color.white.opacity(0.0), in: RoundedRectangle(cornerRadius: 6))
                         }
-                    } label: {
-                        HStack(spacing: 2) {
-                            Image(systemName: "textformat")
-                                .font(.system(size: 11, weight: .medium))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .medium))
+                        .menuStyle(.borderlessButton)
+                        .fixedSize()
+                        .help("选择字体（\(currentFontDisplayName)）")
+
+
+                        Divider().frame(height: 14)
+
+                        // Close
+                        ControlButton(icon: "xmark", tooltip: "隐藏悬浮窗") {
+                            NSApp.windows.first { $0 is FloatingLyricsPanel }?.orderOut(nil)
                         }
-                        .foregroundStyle(.secondary)
-                        .frame(height: 22)
-                        .padding(.horizontal, 4)
-                        .background(Color.white.opacity(0.0), in: RoundedRectangle(cornerRadius: 6))
-                    }
-                    .menuStyle(.borderlessButton)
-                    .fixedSize()
-                    .help("选择字体（\(currentFontDisplayName)）")
-
-
-                    Divider().frame(height: 14)
-
-                    // Close
-                    ControlButton(icon: "xmark", tooltip: "隐藏悬浮窗") {
-                        NSApp.windows.first { $0 is FloatingLyricsPanel }?.orderOut(nil)
                     }
                 }
                 .padding(.horizontal, 10)
